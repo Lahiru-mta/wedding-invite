@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
@@ -14,6 +14,131 @@ function useVisible(threshold = 0.2) {
   return [ref, visible]
 }
 
+/* ─── Chroma key canvas component ─── */
+function ChromaKeyVideo({ onEnded, onStarted }) {
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+  const rafRef = useRef(null)
+  const [ready, setReady] = useState(false)
+  const [playing, setPlaying] = useState(false)
+
+  /* Draw each frame with green pixels removed */
+  const drawFrame = useCallback(() => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas || video.paused || video.ended) return
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    const w = canvas.width
+    const h = canvas.height
+
+    ctx.drawImage(video, 0, 0, w, h)
+
+    const frame = ctx.getImageData(0, 0, w, h)
+    const data = frame.data
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+
+      /* Green screen detection:
+         green channel dominant, at least 1.4x red and 1.4x blue,
+         and sufficiently saturated (not grey/white) */
+      const isGreen = g > 80
+        && g > r * 1.4
+        && g > b * 1.4
+        && (g - Math.max(r, b)) > 30
+
+      if (isGreen) {
+        data[i + 3] = 0 // fully transparent
+      } else if (g > r * 1.2 && g > b * 1.2 && (g - Math.max(r, b)) > 15) {
+        // soft edge — semi-transparent for smoother borders
+        data[i + 3] = Math.max(0, data[i + 3] - 160)
+      }
+    }
+
+    ctx.putImageData(frame, 0, 0)
+    rafRef.current = requestAnimationFrame(drawFrame)
+  }, [])
+
+  const startVideo = useCallback(() => {
+    if (!videoRef.current || playing) return
+    videoRef.current.play().then(() => {
+      setPlaying(true)
+      onStarted?.()
+      rafRef.current = requestAnimationFrame(drawFrame)
+    }).catch(() => {})
+  }, [playing, drawFrame, onStarted])
+
+  /* Auto-play after 2 s */
+  useEffect(() => {
+    if (!ready) return
+    const t = setTimeout(startVideo, 2000)
+    return () => clearTimeout(t)
+  }, [ready, startVideo])
+
+  /* Cleanup RAF on unmount */
+  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }, [])
+
+  const handleVideoEnd = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    onEnded?.()
+  }
+
+  const handleCanPlay = () => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (video && canvas) {
+      canvas.width = video.videoWidth || 1080
+      canvas.height = video.videoHeight || 1920
+      setReady(true)
+    }
+  }
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }} onClick={startVideo}>
+      {/* Hidden video element — source of frames */}
+      <video
+        ref={videoRef}
+        onCanPlay={handleCanPlay}
+        onEnded={handleVideoEnd}
+        playsInline
+        crossOrigin="anonymous"
+        style={{ display: 'none' }}
+      >
+        <source src="/videos/temple-door.webm" type="video/webm" />
+        <source src="/videos/temple-door.mp4" type="video/mp4" />
+      </video>
+
+      {/* Canvas renders chroma-keyed frames */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute', inset: 0,
+          width: '100%', height: '100%',
+          objectFit: 'cover',
+        }}
+      />
+
+      {/* Tap hint before playing */}
+      {!playing && ready && (
+        <div style={{ ...S.tapHint, animation: 'pulse 2s ease-in-out infinite' }}>
+          <div style={S.tapCircle}>▶</div>
+          <p style={S.tapText}>Tap to open your invitation</p>
+        </div>
+      )}
+
+      {/* Loading while video loads */}
+      {!ready && (
+        <div style={S.tapHint}>
+          <p style={{ ...S.tapText, animation: 'pulse 1.5s ease-in-out infinite' }}>Loading…</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function InvitePage() {
   const router = useRouter()
   const { code } = router.query
@@ -21,7 +146,6 @@ export default function InvitePage() {
   const [notFound, setNotFound] = useState(false)
   const [videoStarted, setVideoStarted] = useState(false)
   const [videoDone, setVideoDone] = useState(false)
-  const videoRef = useRef(null)
 
   useEffect(() => {
     if (!code) return
@@ -31,28 +155,6 @@ export default function InvitePage() {
       .catch(() => setNotFound(true))
   }, [code])
 
-  /* Auto-play after 2 seconds */
-  useEffect(() => {
-    if (!guest) return
-    const t = setTimeout(() => {
-      if (videoRef.current) {
-        videoRef.current.play().catch(() => {})
-        setVideoStarted(true)
-      }
-    }, 2000)
-    return () => clearTimeout(t)
-  }, [guest])
-
-  const handleVideoClick = () => {
-    if (!videoStarted && videoRef.current) {
-      videoRef.current.play().catch(() => {})
-      setVideoStarted(true)
-    }
-  }
-
-  const handleVideoEnd = () => setVideoDone(true)
-
-  /* Skip button */
   const skipVideo = () => setVideoDone(true)
 
   if (!guest && !notFound) return <Loader />
@@ -66,37 +168,21 @@ export default function InvitePage() {
         <meta name="robots" content="noindex" />
       </Head>
 
-      {/* ── VIDEO COVER ── */}
+      {/* ── VIDEO COVER with canvas chroma key ── */}
       {!videoDone && (
-        <div style={S.videoCover} onClick={handleVideoClick}>
-          {/* Watercolour background visible through green-screen */}
+        <div style={S.videoCover}>
+          {/* Watercolour background — shows through transparent green areas */}
           <div style={S.videoBackground} />
+          <WatercolourBgVideo />
 
-          <video
-            ref={videoRef}
-            onEnded={handleVideoEnd}
-            playsInline
-            muted={false}
-            style={S.video}
-            /* mix-blend-mode multiply makes white/light areas show bg;
-               for a proper green-screen you'd use a WebGL shader —
-               this CSS approach works well with light-bg videos */
-          >
-            <source src="/videos/temple-door.webm" type="video/webm" />
-            <source src="/videos/temple-door.mp4" type="video/mp4" />
-          </video>
+          <ChromaKeyVideo
+            onStarted={() => setVideoStarted(true)}
+            onEnded={() => setVideoDone(true)}
+          />
 
-          {/* Overlay hint */}
-          {!videoStarted && (
-            <div style={S.tapHint}>
-              <div style={S.tapCircle}>▶</div>
-              <p style={S.tapText}>Tap to open your invitation</p>
-            </div>
-          )}
-
-          {/* Skip */}
+          {/* Skip button */}
           {videoStarted && (
-            <button onClick={(e) => { e.stopPropagation(); skipVideo() }} style={S.skipBtn}>
+            <button onClick={skipVideo} style={S.skipBtn}>
               Skip ›
             </button>
           )}
@@ -170,6 +256,31 @@ export default function InvitePage() {
         .timeline-dot:hover { transform: scale(1.15); }
       `}</style>
     </>
+  )
+}
+
+/* ── Watercolour background specifically for the video cover ── */
+function WatercolourBgVideo() {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none'
+    }}>
+      {[
+        { top: -60, left: -60, size: 340, hue: '340deg', sat: '65%', light: '83%', opacity: 0.45, rotate: 15 },
+        { top: -30, right: -70, size: 300, hue: '200deg', sat: '50%', light: '78%', opacity: 0.38, rotate: -20 },
+        { bottom: -80, left: -40, size: 320, hue: '20deg', sat: '60%', light: '80%', opacity: 0.4, rotate: 30 },
+        { bottom: -50, right: -80, size: 280, hue: '180deg', sat: '45%', light: '76%', opacity: 0.32, rotate: -10 },
+        { top: '38%', left: -100, size: 240, hue: '350deg', sat: '55%', light: '86%', opacity: 0.28, rotate: 45 },
+        { top: '28%', right: -90, size: 260, hue: '210deg', sat: '48%', light: '80%', opacity: 0.3, rotate: -35 },
+      ].map(({ size, hue, sat, light, opacity, rotate, ...pos }, i) => (
+        <div key={i} style={{
+          position: 'absolute', width: size, height: size,
+          borderRadius: '60% 40% 55% 45% / 45% 55% 40% 60%',
+          background: `radial-gradient(ellipse at 40% 40%, hsl(${hue},${sat},${light}) 0%, hsl(${hue},${sat},92%) 60%, transparent 100%)`,
+          opacity, transform: `rotate(${rotate}deg)`, filter: 'blur(16px)', ...pos
+        }} />
+      ))}
+    </div>
   )
 }
 
@@ -381,21 +492,12 @@ function NotFound() {
 const S = {
   videoCover: {
     position: 'fixed', inset: 0, zIndex: 100,
-    background: '#fff',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer',
+    background: '#fff8f2',
     overflow: 'hidden',
   },
   videoBackground: {
-    position: 'absolute', inset: 0,
-    background: 'radial-gradient(ellipse at 30% 20%, hsla(340,60%,85%,0.5) 0%, transparent 50%), radial-gradient(ellipse at 70% 80%, hsla(200,45%,80%,0.4) 0%, transparent 50%), radial-gradient(ellipse at 50% 50%, hsla(20,55%,82%,0.3) 0%, transparent 70%)',
-    filter: 'blur(8px)',
-  },
-  video: {
-    position: 'relative', zIndex: 1,
-    width: '100%', height: '100%',
-    objectFit: 'cover',
-    mixBlendMode: 'multiply',   /* green areas become transparent over white bg */
+    position: 'absolute', inset: 0, zIndex: 0,
+    background: 'linear-gradient(160deg, #fffaf7 0%, #fff4ec 100%)',
   },
   tapHint: {
     position: 'absolute', zIndex: 2,
