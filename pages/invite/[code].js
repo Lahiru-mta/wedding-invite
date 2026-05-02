@@ -280,22 +280,6 @@ function LocationSection() {
         <h2 style={S.sectionTitle}>Crown Regency</h2>
         <p style={S.sectionSub}>Peelipotha Gama Road, Badulla</p>
 
-        {/* Static map preview */}
-        <div style={S.mapPreview}>
-          <iframe
-            src="https://www.google.com/maps/embed/v1/place?key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY&q=Crown+Regency+Badulla"
-            width="100%" height="100%" style={{ border: 0, borderRadius: 16 }}
-            allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade"
-            title="Crown Regency location"
-          />
-          {/* Fallback overlay if map key fails */}
-          <div style={S.mapFallback}>
-            <div style={S.mapPin}>📍</div>
-            <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, color: '#5a3a1a' }}>Crown Regency</p>
-            <p style={{ fontSize: 13, color: '#888', marginTop: 4 }}>Peelipotha Gama Road, Badulla</p>
-          </div>
-        </div>
-
         <a href={MAPS_URL} target="_blank" rel="noopener noreferrer" style={S.mapsBtn}>
           Open in Google Maps ›
         </a>
@@ -308,10 +292,10 @@ function LocationSection() {
 function TimelineSection() {
   const [ref, visible] = useVisible(0.15)
   const events = [
-    { time: '9:30 AM', label: 'Guests Arrive', icon: '🌸', desc: 'Welcome & seating' },
-    { time: '10:30 AM', label: 'Mangalya Dharanam', icon: '🪷', desc: 'Sacred wedding ceremony', highlight: true },
-    { time: '12:00 PM', label: 'Lunch', icon: '🍽️', desc: 'Celebratory feast' },
-    { time: '4:00 PM', label: 'Farewell', icon: '✨', desc: 'End of celebrations' },
+    { time: '9:30 AM onwards', label: '',               icon: '🌸', highlight: false },
+    { time: '10:30 AM',        label: 'Mangalya Dharanam', icon: '🪷', highlight: true  },
+    { time: '12:00 PM',        label: 'Lunch',           icon: '🍽️', highlight: false },
+    { time: '4:00 PM',         label: 'Conclusion',      icon: '✨', highlight: false },
   ]
 
   return (
@@ -323,9 +307,7 @@ function TimelineSection() {
       </div>
 
       <div style={S.timeline}>
-        {/* Vertical line */}
         <div style={S.timelineLine} />
-
         {events.map((ev, i) => (
           <TimelineItem key={i} ev={ev} i={i} visible={visible} />
         ))}
@@ -344,18 +326,15 @@ function TimelineItem({ ev, i, visible }) {
       transform: visible ? 'translateY(0)' : 'translateY(24px)',
       transition: `opacity 0.7s ${i * 0.18}s ease, transform 0.7s ${i * 0.18}s ease`,
     }}>
-      {/* Content card */}
       <div style={{
         ...S.timelineCard,
         ...(ev.highlight ? S.timelineCardHL : {}),
         textAlign: isLeft ? 'right' : 'left',
       }}>
         <p style={S.timelineTime}>{ev.time}</p>
-        <p style={{ ...S.timelineLabel, ...(ev.highlight ? { color: '#c8903a' } : {}) }}>{ev.label}</p>
-        <p style={S.timelineDesc}>{ev.desc}</p>
+        {ev.label ? <p style={{ ...S.timelineLabel, ...(ev.highlight ? { color: '#c8903a' } : {}) }}>{ev.label}</p> : null}
       </div>
 
-      {/* Dot */}
       <div className="timeline-dot" style={{
         ...S.timelineDot,
         ...(ev.highlight ? S.timelineDotHL : {})
@@ -363,7 +342,6 @@ function TimelineItem({ ev, i, visible }) {
         <span style={{ fontSize: ev.highlight ? 18 : 14 }}>{ev.icon}</span>
       </div>
 
-      {/* Spacer */}
       <div style={{ flex: 1 }} />
     </div>
   )
@@ -547,22 +525,6 @@ const S = {
     letterSpacing: 0.5, marginBottom: 36,
   },
 
-  /* Map */
-  mapPreview: {
-    width: '100%', maxWidth: 520, height: 280,
-    borderRadius: 16, overflow: 'hidden',
-    margin: '0 auto 28px',
-    border: '1px solid rgba(200,144,58,0.2)',
-    position: 'relative',
-    background: '#f5f0ea',
-  },
-  mapFallback: {
-    position: 'absolute', inset: 0,
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-    background: 'linear-gradient(135deg, #fdf8f4, #f5ede2)',
-    zIndex: -1,
-  },
-  mapPin: { fontSize: 40, marginBottom: 4 },
   mapsBtn: {
     display: 'inline-block',
     padding: '14px 36px',
@@ -615,10 +577,6 @@ const S = {
     fontFamily: "'Cormorant Garamond', serif",
     fontSize: 18, fontWeight: 600,
     color: '#3a2a1a', marginBottom: 2,
-  },
-  timelineDesc: {
-    fontFamily: "'Raleway', sans-serif",
-    fontSize: 12, color: '#aaa',
   },
   timelineDot: {
     width: 48, height: 48, borderRadius: '50%',
