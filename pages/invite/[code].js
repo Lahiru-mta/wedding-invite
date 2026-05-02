@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 
@@ -14,137 +14,16 @@ function useVisible(threshold = 0.2) {
   return [ref, visible]
 }
 
-/* ─── Chroma key canvas component ─── */
-function ChromaKeyVideo({ onEnded, onStarted }) {
-  const videoRef = useRef(null)
-  const canvasRef = useRef(null)
-  const rafRef = useRef(null)
-  const [ready, setReady] = useState(false)
-  const [playing, setPlaying] = useState(false)
-
-  /* Draw each frame with green pixels removed */
-  const drawFrame = useCallback(() => {
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas || video.paused || video.ended) return
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    const w = canvas.width
-    const h = canvas.height
-
-    ctx.drawImage(video, 0, 0, w, h)
-
-    const frame = ctx.getImageData(0, 0, w, h)
-    const data = frame.data
-
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i]
-      const g = data[i + 1]
-      const b = data[i + 2]
-
-      /* Green screen detection:
-         green channel dominant, at least 1.4x red and 1.4x blue,
-         and sufficiently saturated (not grey/white) */
-      const isGreen = g > 80
-        && g > r * 1.4
-        && g > b * 1.4
-        && (g - Math.max(r, b)) > 30
-
-      if (isGreen) {
-        data[i + 3] = 0 // fully transparent
-      } else if (g > r * 1.2 && g > b * 1.2 && (g - Math.max(r, b)) > 15) {
-        // soft edge — semi-transparent for smoother borders
-        data[i + 3] = Math.max(0, data[i + 3] - 160)
-      }
-    }
-
-    ctx.putImageData(frame, 0, 0)
-    rafRef.current = requestAnimationFrame(drawFrame)
-  }, [])
-
-  const startVideo = useCallback(() => {
-    if (!videoRef.current || playing) return
-    videoRef.current.play().then(() => {
-      setPlaying(true)
-      onStarted?.()
-      rafRef.current = requestAnimationFrame(drawFrame)
-    }).catch(() => {})
-  }, [playing, drawFrame, onStarted])
-
-  /* Auto-play after 2 s */
-  useEffect(() => {
-    if (!ready) return
-    const t = setTimeout(startVideo, 2000)
-    return () => clearTimeout(t)
-  }, [ready, startVideo])
-
-  /* Cleanup RAF on unmount */
-  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }, [])
-
-  const handleVideoEnd = () => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    onEnded?.()
-  }
-
-  const handleCanPlay = () => {
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    if (video && canvas) {
-      canvas.width = video.videoWidth || 1080
-      canvas.height = video.videoHeight || 1920
-      setReady(true)
-    }
-  }
-
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }} onClick={startVideo}>
-      {/* Hidden video element — source of frames */}
-      <video
-        ref={videoRef}
-        onCanPlay={handleCanPlay}
-        onEnded={handleVideoEnd}
-        playsInline
-        crossOrigin="anonymous"
-        style={{ display: 'none' }}
-      >
-        <source src="/videos/temple-door.webm" type="video/webm" />
-        <source src="/videos/temple-door.mp4" type="video/mp4" />
-      </video>
-
-      {/* Canvas renders chroma-keyed frames */}
-      <canvas
-        ref={canvasRef}
-        style={{
-          position: 'absolute', inset: 0,
-          width: '100%', height: '100%',
-          objectFit: 'cover',
-        }}
-      />
-
-      {/* Tap hint before playing */}
-      {!playing && ready && (
-        <div style={{ ...S.tapHint, animation: 'pulse 2s ease-in-out infinite' }}>
-          <div style={S.tapCircle}>▶</div>
-          <p style={S.tapText}>Tap to open your invitation</p>
-        </div>
-      )}
-
-      {/* Loading while video loads */}
-      {!ready && (
-        <div style={S.tapHint}>
-          <p style={{ ...S.tapText, animation: 'pulse 1.5s ease-in-out infinite' }}>Loading…</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function InvitePage() {
   const router = useRouter()
   const { code } = router.query
   const [guest, setGuest] = useState(null)
   const [notFound, setNotFound] = useState(false)
-  const [videoStarted, setVideoStarted] = useState(false)
+  const videoRef = useRef(null)
+
+  // videoOpacity: video layer fades from 1 → 0 between 5s and 8s
+  // so content peeks through underneath as the video fades out
+  const [videoOpacity, setVideoOpacity] = useState(1)
   const [videoDone, setVideoDone] = useState(false)
 
   useEffect(() => {
@@ -155,7 +34,40 @@ export default function InvitePage() {
       .catch(() => setNotFound(true))
   }, [code])
 
-  const skipVideo = () => setVideoDone(true)
+  /* Autoplay as soon as video is ready */
+  useEffect(() => {
+    const vid = videoRef.current
+    if (!vid) return
+    const tryPlay = () => vid.play().catch(() => {})
+    vid.addEventListener('canplay', tryPlay, { once: true })
+    // if already ready
+    if (vid.readyState >= 3) tryPlay()
+    return () => vid.removeEventListener('canplay', tryPlay)
+  }, [guest]) // re-run once guest loads and video mounts
+
+  /* Poll currentTime: start fading at 5s, finish at 8s, hide at 8s */
+  useEffect(() => {
+    const vid = videoRef.current
+    if (!vid) return
+    let raf
+    const tick = () => {
+      const t = vid.currentTime
+      if (t >= 5) {
+        // linear fade: 0% opacity at 8s, 100% at 5s
+        const progress = Math.min((t - 5) / 3, 1) // 0 → 1 over 3 seconds
+        setVideoOpacity(1 - progress)
+        if (progress >= 1) {
+          setVideoDone(true)
+          return
+        }
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [guest])
+
+  const handleVideoEnd = () => setVideoDone(true)
 
   if (!guest && !notFound) return <Loader />
   if (notFound) return <NotFound />
@@ -168,37 +80,27 @@ export default function InvitePage() {
         <meta name="robots" content="noindex" />
       </Head>
 
-      {/* ── VIDEO COVER with canvas chroma key ── */}
-      {!videoDone && (
-        <div style={S.videoCover}>
-          {/* Watercolour background — shows through transparent green areas */}
-          <div style={S.videoBackground} />
-          <WatercolourBgVideo />
+      {/* ── LAYER STACK ──
+          Bottom: invitation content (always rendered, visible through fading video)
+          Top:    video overlay — fades out from 5s → 8s, then removed
+      */}
+      <div style={{ position: 'relative', minHeight: '100vh' }}>
 
-          <ChromaKeyVideo
-            onStarted={() => setVideoStarted(true)}
-            onEnded={() => setVideoDone(true)}
-          />
-
-          {/* Skip button */}
-          {videoStarted && (
-            <button onClick={skipVideo} style={S.skipBtn}>
-              Skip ›
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* ── MAIN INVITATION ── */}
-      {videoDone && (
-        <main style={S.main}>
+        {/* ── INVITATION CONTENT (always in DOM, sits behind video) ── */}
+        <main style={{
+          ...S.main,
+          // Content is visible underneath from 5s as video fades
+          opacity: videoDone ? 1 : 1, // always 1; video overlay dims it visually
+        }}>
 
           {/* ── SECTION 1: INVITATION CARD ── */}
           <section style={S.cardSection}>
-            {/* Watercolour flowers — CSS generated */}
             <WatercolourBg />
-
-            <div style={S.cardInner}>
+            <div style={{
+              ...S.cardInner,
+              // Only animate in once video is fully gone
+              animation: videoDone ? 'fadeUp 1s ease both' : 'none',
+            }}>
               <p style={S.dear}>Dear {guest.name},</p>
               <p style={S.cordially}>You are cordially invited to celebrate</p>
               <p style={S.theMarriage}>the marriage of</p>
@@ -228,28 +130,46 @@ export default function InvitePage() {
             </div>
           </section>
 
-          {/* ── SECTION 2: LOCATION ── */}
           <LocationSection />
-
-          {/* ── SECTION 3: TIMELINE ── */}
           <TimelineSection />
-
-          {/* ── SECTION 4: CONTACT / WHATSAPP ── */}
           <ContactSection guest={guest} />
 
-          {/* Footer */}
           <footer style={S.footer}>
             <p style={S.footerNames}>Lahiru &amp; Dushiya</p>
             <p style={S.footerDate}>24 · May · 2026</p>
           </footer>
         </main>
-      )}
+
+        {/* ── VIDEO OVERLAY — sits on top, fades out ── */}
+        {!videoDone && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 50,
+            pointerEvents: videoOpacity < 0.05 ? 'none' : 'auto',
+            opacity: videoOpacity,
+            transition: 'opacity 0.1s linear',
+          }}>
+            {/* Watercolour background behind the white-bg video */}
+            <WatercolourBgVideo />
+
+            {/* The video — white background becomes transparent via multiply */}
+            <video
+              ref={videoRef}
+              onEnded={handleVideoEnd}
+              playsInline
+              muted
+              style={S.video}
+            >
+              <source src="/videos/temple-door.webm" type="video/webm" />
+              <source src="/videos/temple-door.mp4" type="video/mp4" />
+            </video>
+          </div>
+        )}
+      </div>
 
       <style>{`
         @keyframes fadeUp { from { opacity:0; transform:translateY(32px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
         @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.06);} }
-        @keyframes shimmer { 0%{background-position:200% center;} 100%{background-position:-200% center;} }
         .reveal { opacity:0; transform:translateY(28px); transition: opacity 0.8s ease, transform 0.8s ease; }
         .reveal.visible { opacity:1; transform:translateY(0); }
         .timeline-dot { transition: transform 0.3s; }
@@ -259,25 +179,28 @@ export default function InvitePage() {
   )
 }
 
-/* ── Watercolour background specifically for the video cover ── */
+/* ── Watercolour background behind the video overlay ──
+   This is what shows through the white parts of the video via multiply blend */
 function WatercolourBgVideo() {
   return (
     <div style={{
-      position: 'absolute', inset: 0, zIndex: 0, overflow: 'hidden', pointerEvents: 'none'
+      position: 'absolute', inset: 0, zIndex: 0,
+      background: 'linear-gradient(160deg, #fffaf7 0%, #fdf4ee 50%, #fff8f2 100%)',
+      overflow: 'hidden',
     }}>
       {[
-        { top: -60, left: -60, size: 340, hue: '340deg', sat: '65%', light: '83%', opacity: 0.45, rotate: 15 },
-        { top: -30, right: -70, size: 300, hue: '200deg', sat: '50%', light: '78%', opacity: 0.38, rotate: -20 },
-        { bottom: -80, left: -40, size: 320, hue: '20deg', sat: '60%', light: '80%', opacity: 0.4, rotate: 30 },
-        { bottom: -50, right: -80, size: 280, hue: '180deg', sat: '45%', light: '76%', opacity: 0.32, rotate: -10 },
-        { top: '38%', left: -100, size: 240, hue: '350deg', sat: '55%', light: '86%', opacity: 0.28, rotate: 45 },
-        { top: '28%', right: -90, size: 260, hue: '210deg', sat: '48%', light: '80%', opacity: 0.3, rotate: -35 },
+        { top: -60, left: -60, size: 340, hue: '340deg', sat: '65%', light: '83%', opacity: 0.5, rotate: 15 },
+        { top: -30, right: -70, size: 300, hue: '200deg', sat: '50%', light: '78%', opacity: 0.42, rotate: -20 },
+        { bottom: -80, left: -40, size: 320, hue: '20deg',  sat: '60%', light: '80%', opacity: 0.45, rotate: 30 },
+        { bottom: -50, right: -80, size: 280, hue: '180deg', sat: '45%', light: '76%', opacity: 0.36, rotate: -10 },
+        { top: '38%', left: -100, size: 240, hue: '350deg', sat: '55%', light: '86%', opacity: 0.32, rotate: 45 },
+        { top: '28%', right: -90, size: 260, hue: '210deg', sat: '48%', light: '80%', opacity: 0.34, rotate: -35 },
       ].map(({ size, hue, sat, light, opacity, rotate, ...pos }, i) => (
         <div key={i} style={{
           position: 'absolute', width: size, height: size,
           borderRadius: '60% 40% 55% 45% / 45% 55% 40% 60%',
-          background: `radial-gradient(ellipse at 40% 40%, hsl(${hue},${sat},${light}) 0%, hsl(${hue},${sat},92%) 60%, transparent 100%)`,
-          opacity, transform: `rotate(${rotate}deg)`, filter: 'blur(16px)', ...pos
+          background: `radial-gradient(ellipse at 40% 40%, hsl(${hue},${sat},${light}) 0%, hsl(${hue},${sat},93%) 60%, transparent 100%)`,
+          opacity, transform: `rotate(${rotate}deg)`, filter: 'blur(18px)', ...pos
         }} />
       ))}
     </div>
@@ -490,41 +413,14 @@ function NotFound() {
 
 /* ─────── STYLES ─────── */
 const S = {
-  videoCover: {
-    position: 'fixed', inset: 0, zIndex: 100,
-    background: '#fff8f2',
-    overflow: 'hidden',
+  video: {
+    position: 'absolute', inset: 0, zIndex: 1,
+    width: '100%', height: '100%',
+    objectFit: 'cover',
+    mixBlendMode: 'multiply',
+    /* White pixels in video → fully transparent (multiply with any colour = that colour)
+       Dark/coloured pixels (temple, doors) → show on top of watercolour bg */
   },
-  videoBackground: {
-    position: 'absolute', inset: 0, zIndex: 0,
-    background: 'linear-gradient(160deg, #fffaf7 0%, #fff4ec 100%)',
-  },
-  tapHint: {
-    position: 'absolute', zIndex: 2,
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
-    animation: 'pulse 2s ease-in-out infinite',
-  },
-  tapCircle: {
-    width: 72, height: 72, borderRadius: '50%',
-    background: 'rgba(200,144,58,0.9)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 26, color: '#fff',
-    boxShadow: '0 0 0 12px rgba(200,144,58,0.2)',
-  },
-  tapText: {
-    fontFamily: "'Cormorant Garamond', serif",
-    fontStyle: 'italic', fontSize: 18,
-    color: '#5a3a1a', letterSpacing: 1,
-  },
-  skipBtn: {
-    position: 'absolute', bottom: 32, right: 24, zIndex: 3,
-    background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(200,144,58,0.4)',
-    borderRadius: 40, padding: '8px 20px',
-    fontFamily: "'Raleway', sans-serif", fontSize: 13, color: '#8a5a1a',
-    cursor: 'pointer', backdropFilter: 'blur(8px)',
-    letterSpacing: 1,
-  },
-
   main: { width: '100%', overflowX: 'hidden' },
 
   /* Card */
