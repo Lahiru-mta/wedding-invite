@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Raleway:wght@300;400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    background: #fffaf7;
+    font-family: 'Raleway', sans-serif;
+    position: relative;
+  }
+
+  /* ── Watercolour blobs ── */
+  .blob {
+    position: absolute;
+    border-radius: 60% 40% 55% 45% / 45% 55% 40% 60%;
+    filter: blur(40px);
+    pointer-events: none;
+  }
+
+  /* ── Petal shapes ── */
+  .petal {
+    position: absolute;
+    border-radius: 50% 10% 50% 10%;
+    filter: blur(2px);
+    pointer-events: none;
+  }
+
+  .content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    gap: 0;
+  }
+
+  .tag {
+    font-family: 'Raleway', sans-serif;
+    font-size: 13px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #b07a30;
+    margin-bottom: 16px;
+  }
+
+  .cordially {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 22px;
+    color: #7a5a2a;
+    margin-bottom: 6px;
+  }
+
+  .name-lahiru {
+    font-family: 'Great Vibes', cursive;
+    font-size: 130px;
+    line-height: 1;
+    color: #c8903a;
+    text-shadow: 0 2px 30px rgba(200,144,58,0.25);
+    margin-bottom: -10px;
+  }
+
+  .amp {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 42px;
+    color: #3a2a1a;
+    line-height: 1.2;
+  }
+
+  .name-dushiya {
+    font-family: 'Great Vibes', cursive;
+    font-size: 140px;
+    line-height: 1;
+    color: #c8903a;
+    text-shadow: 0 2px 30px rgba(200,144,58,0.25);
+    margin-top: -10px;
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 18px 0 14px;
+    width: 480px;
+  }
+  .divider-line {
+    flex: 1;
+    height: 0.5px;
+    background: linear-gradient(to right, transparent, #c8903a, transparent);
+  }
+  .divider-dot { color: #c8903a; font-size: 16px; }
+
+  .date-line {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    color: #3a2a1a;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+  }
+  .date-sep { color: #c8903a; margin: 0 10px; }
+
+  .venue {
+    font-family: 'Raleway', sans-serif;
+    font-size: 14px;
+    color: #888;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  /* Border frame */
+  .frame {
+    position: absolute;
+    inset: 20px;
+    border: 0.5px solid rgba(200,144,58,0.25);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .frame-inner {
+    position: absolute;
+    inset: 28px;
+    border: 0.5px solid rgba(200,144,58,0.12);
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  /* Corner ornaments */
+  .corner { position: absolute; width: 40px; height: 40px; z-index: 6; }
+  .corner svg { width: 100%; height: 100%; }
+  .tl { top: 14px; left: 14px; }
+  .tr { top: 14px; right: 14px; transform: scaleX(-1); }
+  .bl { bottom: 14px; left: 14px; transform: scaleY(-1); }
+  .br { bottom: 14px; right: 14px; transform: scale(-1); }
+</style>
+</head>
+<body>
+
+  <!-- Watercolour blobs -->
+  <div class="blob" style="width:500px;height:500px;top:-120px;left:-100px;background:radial-gradient(ellipse at 40% 40%,hsl(340deg,65%,83%) 0%,hsl(340deg,65%,93%) 60%,transparent 100%);opacity:0.55;transform:rotate(15deg)"></div>
+  <div class="blob" style="width:440px;height:440px;top:-80px;right:-120px;background:radial-gradient(ellipse at 40% 40%,hsl(200deg,50%,80%) 0%,hsl(200deg,50%,93%) 60%,transparent 100%);opacity:0.45;transform:rotate(-20deg)"></div>
+  <div class="blob" style="width:480px;height:480px;bottom:-120px;left:-80px;background:radial-gradient(ellipse at 40% 40%,hsl(20deg,60%,82%) 0%,hsl(20deg,60%,93%) 60%,transparent 100%);opacity:0.5;transform:rotate(30deg)"></div>
+  <div class="blob" style="width:420px;height:420px;bottom:-100px;right:-140px;background:radial-gradient(ellipse at 40% 40%,hsl(180deg,45%,78%) 0%,hsl(180deg,45%,93%) 60%,transparent 100%);opacity:0.4;transform:rotate(-10deg)"></div>
+  <div class="blob" style="width:300px;height:300px;top:40%;left:-120px;background:radial-gradient(ellipse at 40% 40%,hsl(350deg,55%,86%) 0%,transparent 100%);opacity:0.35;transform:rotate(45deg)"></div>
+  <div class="blob" style="width:320px;height:320px;top:30%;right:-140px;background:radial-gradient(ellipse at 40% 40%,hsl(210deg,48%,82%) 0%,transparent 100%);opacity:0.38;transform:rotate(-35deg)"></div>
+
+  <!-- Petal details -->
+  <div class="petal" style="width:45px;height:80px;top:60px;left:180px;background:hsl(340deg,55%,82%);opacity:0.4;transform:rotate(35deg)"></div>
+  <div class="petal" style="width:35px;height:65px;top:90px;left:210px;background:hsl(20deg,50%,84%);opacity:0.35;transform:rotate(-15deg)"></div>
+  <div class="petal" style="width:50px;height:90px;top:50px;right:190px;background:hsl(200deg,45%,80%);opacity:0.38;transform:rotate(-40deg)"></div>
+  <div class="petal" style="width:40px;height:70px;top:85px;right:220px;background:hsl(350deg,50%,83%);opacity:0.32;transform:rotate(20deg)"></div>
+  <div class="petal" style="width:42px;height:75px;bottom:65px;left:200px;background:hsl(180deg,42%,80%);opacity:0.36;transform:rotate(-50deg)"></div>
+  <div class="petal" style="width:38px;height:68px;bottom:80px;right:210px;background:hsl(340deg,52%,82%);opacity:0.33;transform:rotate(60deg)"></div>
+  <div class="petal" style="width:30px;height:55px;bottom:55px;left:350px;background:hsl(20deg,48%,84%);opacity:0.28;transform:rotate(25deg)"></div>
+  <div class="petal" style="width:32px;height:58px;bottom:60px;right:360px;background:hsl(200deg,44%,82%);opacity:0.3;transform:rotate(-30deg)"></div>
+
+  <!-- Border frames -->
+  <div class="frame"></div>
+  <div class="frame-inner"></div>
+
+  <!-- Corner ornaments -->
+  <div class="corner tl">
+    <svg viewBox="0 0 40 40" fill="none"><path d="M3 37 L3 3 L37 3" stroke="#c8903a" stroke-width="1.2" fill="none"/><circle cx="3" cy="3" r="2" fill="#c8903a"/><circle cx="10" cy="3" r="0.8" fill="#c8903a" opacity="0.5"/><circle cx="3" cy="10" r="0.8" fill="#c8903a" opacity="0.5"/></svg>
+  </div>
+  <div class="corner tr">
+    <svg viewBox="0 0 40 40" fill="none"><path d="M3 37 L3 3 L37 3" stroke="#c8903a" stroke-width="1.2" fill="none"/><circle cx="3" cy="3" r="2" fill="#c8903a"/><circle cx="10" cy="3" r="0.8" fill="#c8903a" opacity="0.5"/><circle cx="3" cy="10" r="0.8" fill="#c8903a" opacity="0.5"/></svg>
+  </div>
+  <div class="corner bl">
+    <svg viewBox="0 0 40 40" fill="none"><path d="M3 37 L3 3 L37 3" stroke="#c8903a" stroke-width="1.2" fill="none"/><circle cx="3" cy="3" r="2" fill="#c8903a"/><circle cx="10" cy="3" r="0.8" fill="#c8903a" opacity="0.5"/><circle cx="3" cy="10" r="0.8" fill="#c8903a" opacity="0.5"/></svg>
+  </div>
+  <div class="corner br">
+    <svg viewBox="0 0 40 40" fill="none"><path d="M3 37 L3 3 L37 3" stroke="#c8903a" stroke-width="1.2" fill="none"/><circle cx="3" cy="3" r="2" fill="#c8903a"/><circle cx="10" cy="3" r="0.8" fill="#c8903a" opacity="0.5"/><circle cx="3" cy="10" r="0.8" fill="#c8903a" opacity="0.5"/></svg>
+  </div>
+
+  <!-- Main content -->
+  <div class="content">
+    <p class="tag">Wedding Invitation</p>
+    <p class="cordially">You are cordially invited to the marriage of</p>
+    <p class="name-lahiru">Lahiru</p>
+    <p class="amp">&amp;</p>
+    <p class="name-dushiya">Dushiya</p>
+
+    <div class="divider">
+      <div class="divider-line"></div>
+      <span class="divider-dot">🪷</span>
+      <div class="divider-line"></div>
+    </div>
+
+    <p class="date-line">
+      Sunday <span class="date-sep">|</span> 24 <span class="date-sep">|</span> May 2026
+    </p>
+    <p class="venue">Crown Regency · Badulla</p>
+  </div>
+
+</body>
+</html>

@@ -75,9 +75,24 @@ export default function InvitePage() {
   return (
     <>
       <Head>
-        <title>Lahiru &amp; Dushiya — Wedding Invitation</title>
+        <title>Lahiru &amp; Dushiya Wedding — 24 May 2026</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="robots" content="noindex" />
+
+        {/* ── Open Graph — WhatsApp, Facebook, iMessage all read these ── */}
+        <meta property="og:type"        content="website" />
+        <meta property="og:title"       content="Lahiru & Dushiya are getting married! 🪷" />
+        <meta property="og:description" content="You're cordially invited to celebrate the marriage of Lahiru & Dushiya · Sunday, 24 May 2026 · Crown Regency, Badulla" />
+        <meta property="og:image"       content="https://YOUR-DOMAIN.vercel.app/og-image.jpg" />
+        <meta property="og:image:width"  content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt"   content="Wedding invitation for Lahiru and Dushiya" />
+
+        {/* ── Twitter / WhatsApp fallback ── */}
+        <meta name="twitter:card"        content="summary_large_image" />
+        <meta name="twitter:title"       content="Lahiru & Dushiya are getting married! 🪷" />
+        <meta name="twitter:description" content="Sunday, 24 May 2026 · Crown Regency, Badulla" />
+        <meta name="twitter:image"       content="https://YOUR-DOMAIN.vercel.app/og-image.jpg" />
       </Head>
 
       {/* ── LAYER STACK ──
