@@ -386,7 +386,7 @@ function TimelineSection() {
     { time: '9:30 AM onwards', label: '',                  icon: '🌸', highlight: false },
     { time: '10:30 AM',        label: 'Mangalya Dharanam', icon: '🪷', highlight: true  },
     { time: '12:00 PM',        label: 'Lunch',             icon: '🍽️', highlight: false },
-    { time: '4:00 PM',         label: 'Conclusion',        icon: '✨', highlight: false },
+    { time: '4:00 PM',         label: 'Departure',        icon: '✨', highlight: false },
   ]
   return (
     <section style={{ ...S.section, background: 'linear-gradient(180deg, #fff 0%, #fdf8f4 100%)' }}>
