@@ -14,15 +14,92 @@ function useVisible(threshold = 0.2) {
   return [ref, visible]
 }
 
+/* ─── Background music hook ───
+   Starts as soon as the page loads. Loops softly at low volume.
+   Browser autoplay policy: audio needs a user gesture on some browsers.
+   We try silent autoplay first; if blocked we show a subtle mute/unmute button. */
+function useBackgroundMusic() {
+  const audioRef = useRef(null)
+  const [muted, setMuted] = useState(false)
+  const [started, setStarted] = useState(false)
+  const [blocked, setBlocked] = useState(false)
+
+  useEffect(() => {
+    const audio = new Audio('/music/background.mp3')
+    audio.loop = true
+    audio.volume = 0.35
+    audioRef.current = audio
+
+    const tryPlay = () => {
+      audio.play()
+        .then(() => { setStarted(true); setBlocked(false) })
+        .catch(() => { setBlocked(true) })
+    }
+
+    // Try immediately
+    tryPlay()
+
+    // Also try on first user interaction if blocked
+    const onInteract = () => {
+      if (!started) { tryPlay(); window.removeEventListener('click', onInteract) }
+    }
+    window.addEventListener('click', onInteract)
+
+    return () => {
+      audio.pause()
+      window.removeEventListener('click', onInteract)
+    }
+  }, [])
+
+  const toggleMute = () => {
+    if (!audioRef.current) return
+    audioRef.current.muted = !audioRef.current.muted
+    setMuted(m => !m)
+    // If it was blocked, also try playing now
+    if (blocked) {
+      audioRef.current.play().then(() => { setStarted(true); setBlocked(false) }).catch(() => {})
+    }
+  }
+
+  return { muted, blocked, toggleMute }
+}
+
+/* ─── Float-in animation wrapper ───
+   Children float up softly from slight blur when they enter the viewport,
+   with a configurable delay for staggered sequences. */
+function FloatIn({ children, delay = 0, style = {} }) {
+  const ref = useRef(null)
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const obs = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { setVisible(true); obs.disconnect() }
+    }, { threshold: 0.15 })
+    if (ref.current) obs.observe(ref.current)
+    return () => obs.disconnect()
+  }, [])
+  return (
+    <div ref={ref} style={{
+      opacity: visible ? 1 : 0,
+      transform: visible ? 'translateY(0) scale(1)' : 'translateY(22px) scale(0.98)',
+      filter: visible ? 'blur(0px)' : 'blur(3px)',
+      transition: `opacity 0.9s ${delay}s cubic-bezier(0.22,1,0.36,1),
+                   transform 0.9s ${delay}s cubic-bezier(0.22,1,0.36,1),
+                   filter 0.9s ${delay}s ease`,
+      ...style
+    }}>
+      {children}
+    </div>
+  )
+}
+
 export default function InvitePage() {
   const router = useRouter()
   const { code } = router.query
   const [guest, setGuest] = useState(null)
   const [notFound, setNotFound] = useState(false)
   const videoRef = useRef(null)
+  const { muted, blocked, toggleMute } = useBackgroundMusic()
 
-  // videoOpacity: video layer fades from 1 → 0 between 5s and 8s
-  // so content peeks through underneath as the video fades out
   const [videoOpacity, setVideoOpacity] = useState(1)
   const [videoDone, setVideoDone] = useState(false)
 
@@ -111,37 +188,48 @@ export default function InvitePage() {
           {/* ── SECTION 1: INVITATION CARD ── */}
           <section style={S.cardSection}>
             <WatercolourBg />
-            <div style={{
-              ...S.cardInner,
-              // Only animate in once video is fully gone
-              animation: videoDone ? 'fadeUp 1s ease both' : 'none',
-            }}>
-              <p style={S.dear}>Dear {guest.name},</p>
-              <p style={S.cordially}>You are cordially invited to celebrate</p>
-              <p style={S.theMarriage}>the marriage of</p>
+            <div style={S.cardInner}>
 
-              <div style={S.namesWrap}>
-                <span style={S.nameBride}>Lahiru</span>
-                <span style={S.ampersand}>&amp;</span>
-                <span style={S.nameGroom}>Dushiya</span>
-              </div>
+              <FloatIn delay={0.1}>
+                <p style={S.dear}>Dear {guest.name},</p>
+              </FloatIn>
 
-              <div style={S.dateLine}>
-                <span>Sunday</span>
-                <span style={S.dateSep}>|</span>
-                <span>24</span>
-                <span style={S.dateSep}>|</span>
-                <span>May</span>
-              </div>
-              <p style={S.timeRange}>From 9.30 am to 4.00 pm</p>
+              <FloatIn delay={0.25}>
+                <p style={S.cordially}>You are cordially invited to celebrate</p>
+                <p style={S.theMarriage}>the marriage of</p>
+              </FloatIn>
 
-              <div style={S.venueLine}>
-                <p style={S.venueName}>Crown Regency</p>
-                <p style={S.venueAddress}>Peelipotha Gama Road, Badulla</p>
-              </div>
+              <FloatIn delay={0.45} style={{ marginBottom: 32 }}>
+                <div style={S.namesWrap}>
+                  <span style={S.nameBride}>Lahiru</span>
+                  <span style={S.ampersand}>&amp;</span>
+                  <span style={S.nameGroom}>Dushiya</span>
+                </div>
+              </FloatIn>
 
-              <p style={S.ceremony}>Mangalya Dharanam ceremony at 10.30 AM</p>
-              <p style={S.reception}>Reception to follow</p>
+              <FloatIn delay={0.65}>
+                <div style={S.dateLine}>
+                  <span>Sunday</span>
+                  <span style={S.dateSep}>|</span>
+                  <span>24</span>
+                  <span style={S.dateSep}>|</span>
+                  <span>May</span>
+                </div>
+                <p style={S.timeRange}>From 9.30 am to 4.00 pm</p>
+              </FloatIn>
+
+              <FloatIn delay={0.8}>
+                <div style={S.venueLine}>
+                  <p style={S.venueName}>Crown Regency</p>
+                  <p style={S.venueAddress}>Peelipotha Gama Road, Badulla</p>
+                </div>
+              </FloatIn>
+
+              <FloatIn delay={0.95}>
+                <p style={S.ceremony}>Mangalya Dharanam ceremony at 10.30 AM</p>
+                <p style={S.reception}>Reception to follow</p>
+              </FloatIn>
+
             </div>
           </section>
 
@@ -150,10 +238,17 @@ export default function InvitePage() {
           <ContactSection guest={guest} />
 
           <footer style={S.footer}>
-            <p style={S.footerNames}>Lahiru &amp; Dushiya</p>
-            <p style={S.footerDate}>24 · May · 2026</p>
+            <FloatIn>
+              <p style={S.footerNames}>Lahiru &amp; Dushiya</p>
+              <p style={S.footerDate}>24 · May · 2026</p>
+            </FloatIn>
           </footer>
         </main>
+
+        {/* ── MUTE / UNMUTE BUTTON — fixed bottom right ── */}
+        <button onClick={toggleMute} style={S.muteBtn} title={muted ? 'Unmute music' : 'Mute music'}>
+          {muted ? '🔇' : '🎵'}
+        </button>
 
         {/* ── VIDEO OVERLAY — sits on top, fades out ── */}
         {!videoDone && (
@@ -270,62 +365,52 @@ function WatercolourBg() {
 
 /* ── Location Section ── */
 function LocationSection() {
-  const [ref, visible] = useVisible(0.2)
   const MAPS_URL = 'https://www.google.com/maps/search/Crown+Regency+Badulla+Peelipotha+Gama+Road'
-
   return (
-    <section ref={ref} style={S.section}>
-      <div className={`reveal ${visible ? 'visible' : ''}`} style={{ textAlign: 'center' }}>
+    <section style={S.section}>
+      <FloatIn style={{ textAlign: 'center' }}>
         <div style={S.sectionTag}>📍 Location</div>
         <h2 style={S.sectionTitle}>Crown Regency</h2>
         <p style={S.sectionSub}>Peelipotha Gama Road, Badulla</p>
-
         <a href={MAPS_URL} target="_blank" rel="noopener noreferrer" style={S.mapsBtn}>
           Open in Google Maps ›
         </a>
-      </div>
+      </FloatIn>
     </section>
   )
 }
 
 /* ── Timeline Section ── */
 function TimelineSection() {
-  const [ref, visible] = useVisible(0.15)
   const events = [
-    { time: '9:30 AM onwards', label: '',               icon: '🌸', highlight: false },
+    { time: '9:30 AM onwards', label: '',                  icon: '🌸', highlight: false },
     { time: '10:30 AM',        label: 'Mangalya Dharanam', icon: '🪷', highlight: true  },
-    { time: '12:00 PM',        label: 'Lunch',           icon: '🍽️', highlight: false },
-    { time: '4:00 PM',         label: 'Conclusion',      icon: '✨', highlight: false },
+    { time: '12:00 PM',        label: 'Lunch',             icon: '🍽️', highlight: false },
+    { time: '4:00 PM',         label: 'Conclusion',        icon: '✨', highlight: false },
   ]
-
   return (
-    <section ref={ref} style={{ ...S.section, background: 'linear-gradient(180deg, #fff 0%, #fdf8f4 100%)' }}>
-      <div className={`reveal ${visible ? 'visible' : ''}`} style={{ textAlign: 'center' }}>
+    <section style={{ ...S.section, background: 'linear-gradient(180deg, #fff 0%, #fdf8f4 100%)' }}>
+      <FloatIn style={{ textAlign: 'center' }}>
         <div style={S.sectionTag}>🕐 Schedule</div>
         <h2 style={S.sectionTitle}>Order of the Day</h2>
         <p style={S.sectionSub}>Sunday, 24th May 2026</p>
-      </div>
-
+      </FloatIn>
       <div style={S.timeline}>
         <div style={S.timelineLine} />
         {events.map((ev, i) => (
-          <TimelineItem key={i} ev={ev} i={i} visible={visible} />
+          <FloatIn key={i} delay={i * 0.15}>
+            <TimelineItem ev={ev} i={i} />
+          </FloatIn>
         ))}
       </div>
     </section>
   )
 }
 
-function TimelineItem({ ev, i, visible }) {
+function TimelineItem({ ev, i }) {
   const isLeft = i % 2 === 0
   return (
-    <div style={{
-      ...S.timelineRow,
-      flexDirection: isLeft ? 'row' : 'row-reverse',
-      opacity: visible ? 1 : 0,
-      transform: visible ? 'translateY(0)' : 'translateY(24px)',
-      transition: `opacity 0.7s ${i * 0.18}s ease, transform 0.7s ${i * 0.18}s ease`,
-    }}>
+    <div style={{ ...S.timelineRow, flexDirection: isLeft ? 'row' : 'row-reverse' }}>
       <div style={{
         ...S.timelineCard,
         ...(ev.highlight ? S.timelineCardHL : {}),
@@ -334,14 +419,9 @@ function TimelineItem({ ev, i, visible }) {
         <p style={S.timelineTime}>{ev.time}</p>
         {ev.label ? <p style={{ ...S.timelineLabel, ...(ev.highlight ? { color: '#c8903a' } : {}) }}>{ev.label}</p> : null}
       </div>
-
-      <div className="timeline-dot" style={{
-        ...S.timelineDot,
-        ...(ev.highlight ? S.timelineDotHL : {})
-      }}>
+      <div className="timeline-dot" style={{ ...S.timelineDot, ...(ev.highlight ? S.timelineDotHL : {}) }}>
         <span style={{ fontSize: ev.highlight ? 18 : 14 }}>{ev.icon}</span>
       </div>
-
       <div style={{ flex: 1 }} />
     </div>
   )
@@ -349,18 +429,15 @@ function TimelineItem({ ev, i, visible }) {
 
 /* ── Contact / WhatsApp Section ── */
 function ContactSection({ guest }) {
-  const [ref, visible] = useVisible(0.2)
   const waUrl = `https://wa.me/${guest.contactNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${guest.contactName}, I received the wedding invitation for Lahiru & Dushiya's wedding on 24th May 2026. `)}`
-
   return (
-    <section ref={ref} style={{ ...S.section, background: '#fdf6f0', paddingBottom: 60 }}>
-      <div className={`reveal ${visible ? 'visible' : ''}`} style={{ textAlign: 'center', maxWidth: 480, margin: '0 auto' }}>
+    <section style={{ ...S.section, background: '#fdf6f0', paddingBottom: 60 }}>
+      <FloatIn style={{ textAlign: 'center', maxWidth: 480, margin: '0 auto' }}>
         <div style={S.sectionTag}>💌 Contact</div>
         <h2 style={S.sectionTitle}>Need Help?</h2>
         <p style={S.sectionSub}>
           For any queries, please reach out to <strong style={{ color: '#3a2a1a' }}>{guest.contactName}</strong>
         </p>
-
         <div style={S.contactCard}>
           <div style={S.contactAvatar}>{guest.contactName.charAt(0)}</div>
           <div>
@@ -368,18 +445,16 @@ function ContactSection({ guest }) {
             <p style={S.contactNum}>{guest.contactNumber}</p>
           </div>
         </div>
-
         <a href={waUrl} target="_blank" rel="noopener noreferrer" style={S.waBtn}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="white" style={{ flexShrink: 0 }}>
             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
           </svg>
           Message {guest.contactName} on WhatsApp
         </a>
-
         <p style={{ fontSize: 12, color: '#bbb', marginTop: 16, letterSpacing: 1 }}>
           We look forward to celebrating with you 🪷
         </p>
-      </div>
+      </FloatIn>
     </section>
   )
 }
@@ -628,6 +703,18 @@ const S = {
     textDecoration: 'none',
     boxShadow: '0 8px 28px rgba(37,211,102,0.3)',
     transition: 'transform 0.2s, box-shadow 0.2s',
+  },
+
+  muteBtn: {
+    position: 'fixed', bottom: 24, right: 24, zIndex: 200,
+    width: 44, height: 44, borderRadius: '50%',
+    background: 'rgba(255,255,255,0.85)',
+    border: '1px solid rgba(200,144,58,0.3)',
+    backdropFilter: 'blur(10px)',
+    fontSize: 18, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+    transition: 'transform 0.2s',
   },
 
   /* Footer */
