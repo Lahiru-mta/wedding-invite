@@ -111,16 +111,34 @@ export default function InvitePage() {
       .catch(() => setNotFound(true))
   }, [code])
 
-  /* Autoplay as soon as video is ready */
+  /* Autoplay as soon as video is ready — iOS Safari fix:
+     1. Must set .muted = true via JS (React's muted prop is ignored by Safari)
+     2. Must set playsinline attribute via JS too
+     3. Use loadedmetadata + canplaythrough for more reliable iOS triggering */
   useEffect(() => {
     const vid = videoRef.current
     if (!vid) return
-    const tryPlay = () => vid.play().catch(() => {})
-    vid.addEventListener('canplay', tryPlay, { once: true })
-    // if already ready
-    if (vid.readyState >= 3) tryPlay()
-    return () => vid.removeEventListener('canplay', tryPlay)
-  }, [guest]) // re-run once guest loads and video mounts
+
+    // iOS Safari requires muted to be set directly on the DOM element
+    vid.muted = true
+    vid.setAttribute('playsinline', '')
+    vid.setAttribute('webkit-playsinline', '')
+
+    const tryPlay = () => {
+      vid.muted = true // re-assert before each play attempt
+      const p = vid.play()
+      if (p !== undefined) p.catch(() => {})
+    }
+
+    vid.addEventListener('loadedmetadata', tryPlay, { once: true })
+    vid.addEventListener('canplaythrough', tryPlay, { once: true })
+    if (vid.readyState >= 2) tryPlay()
+
+    return () => {
+      vid.removeEventListener('loadedmetadata', tryPlay)
+      vid.removeEventListener('canplaythrough', tryPlay)
+    }
+  }, [guest])
 
   /* Poll currentTime: start fading at 5s, finish at 8s, hide at 8s */
   useEffect(() => {
@@ -257,20 +275,29 @@ export default function InvitePage() {
             pointerEvents: videoOpacity < 0.05 ? 'none' : 'auto',
             opacity: videoOpacity,
             transition: 'opacity 0.1s linear',
+            // iOS Safari needs an explicit background on the blend parent
+            background: 'linear-gradient(160deg, #fffaf7 0%, #fdf4ee 50%, #fff8f2 100%)',
+            isolation: 'isolate',
           }}>
             {/* Watercolour background behind the white-bg video */}
             <WatercolourBgVideo />
 
-            {/* The video — white background becomes transparent via multiply */}
+            {/* The video — white background becomes transparent via multiply.
+                iOS Safari: muted/playsInline must also be set as real HTML attributes */}
             <video
               ref={videoRef}
               onEnded={handleVideoEnd}
               playsInline
               muted
+              autoPlay
+              preload="auto"
               style={S.video}
+              // Real HTML attributes for iOS Safari (JSX props alone aren't enough)
+              {...{ 'webkit-playsinline': '', 'x-webkit-airplay': 'deny' }}
             >
-              <source src="/videos/temple-door.webm" type="video/webm" />
+              {/* MP4 first — better iOS Safari compatibility than WebM */}
               <source src="/videos/temple-door.mp4" type="video/mp4" />
+              <source src="/videos/temple-door.webm" type="video/webm" />
             </video>
           </div>
         )}
@@ -386,7 +413,7 @@ function TimelineSection() {
     { time: '9:30 AM onwards', label: '',                  icon: '🌸', highlight: false },
     { time: '10:30 AM',        label: 'Mangalya Dharanam', icon: '🪷', highlight: true  },
     { time: '12:00 PM',        label: 'Lunch',             icon: '🍽️', highlight: false },
-    { time: '4:00 PM',         label: 'Departure',        icon: '✨', highlight: false },
+    { time: '4:00 PM',         label: 'Conclusion',        icon: '✨', highlight: false },
   ]
   return (
     <section style={{ ...S.section, background: 'linear-gradient(180deg, #fff 0%, #fdf8f4 100%)' }}>
@@ -486,8 +513,7 @@ const S = {
     width: '100%', height: '100%',
     objectFit: 'cover',
     mixBlendMode: 'multiply',
-    /* White pixels in video → fully transparent (multiply with any colour = that colour)
-       Dark/coloured pixels (temple, doors) → show on top of watercolour bg */
+    WebkitMixBlendMode: 'multiply', // iOS Safari prefix
   },
   main: { width: '100%', overflowX: 'hidden' },
 
